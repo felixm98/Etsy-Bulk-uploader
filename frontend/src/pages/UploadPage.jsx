@@ -2,6 +2,7 @@ import { useState } from 'react'
 import DropZone from '../components/DropZone'
 import PreProcessModal from '../components/PreProcessModal'
 import ListingGrid from '../components/ListingGrid'
+import api from '../services/api'
 
 function UploadPage({ listings, addListings, updateListing, removeListing, clearListings, addUpload }) {
   const [isProcessing, setIsProcessing] = useState(false)
@@ -63,39 +64,33 @@ function UploadPage({ listings, addListings, updateListing, removeListing, clear
     setIsProcessing(false)
   }
   
-  const handleUpload = (listingsToUpload, scheduleDate) => {
-    // Create upload record
-    const upload = {
-      id: Date.now().toString(),
-      title: listingsToUpload.length === 1 
-        ? listingsToUpload[0].title 
-        : `${listingsToUpload.length} produkter`,
-      imageCount: listingsToUpload.reduce((sum, l) => sum + l.images.length, 0),
-      thumbnail: listingsToUpload[0]?.images[0]?.preview,
-      status: scheduleDate ? 'scheduled' : 'uploading',
-      scheduledFor: scheduleDate,
-      createdAt: new Date(),
-      listings: listingsToUpload.map(l => l.id)
+  const handleUpload = async (listingsToUpload, scheduleDate) => {
+    // Prepare listings for backend (convert images/videos to metadata, not File objects)
+    const listingsPayload = listingsToUpload.map(l => ({
+      ...l,
+      images: l.images ? l.images.map(img => ({ name: img.name })) : [],
+      videos: l.videos ? l.videos.map(vid => ({ name: vid.name })) : []
+    }))
+
+    // Send upload to backend
+    try {
+      const uploadResp = await api.createUpload(
+        listingsToUpload.length === 1 ? listingsToUpload[0].title : `${listingsToUpload.length} produkter`,
+        listingsPayload,
+        scheduleDate
+      )
+      // Optionally, upload video files separately if backend requires
+      // (You may need to implement a /api/uploads/:id/videos endpoint for actual file upload)
+
+      addUpload(uploadResp)
+      listingsToUpload.forEach(l => removeListing(l.id))
+      alert(scheduleDate 
+        ? `${listingsToUpload.length} produkter schemalagda för publicering!`
+        : `${listingsToUpload.length} produkter laddas upp till Etsy som drafts...`
+      )
+    } catch (err) {
+      alert('Fel vid uppladdning: ' + (err.message || err))
     }
-    
-    addUpload(upload)
-    
-    // Clear uploaded listings from grid
-    listingsToUpload.forEach(l => removeListing(l.id))
-    
-    // Simulate upload completion
-    if (!scheduleDate) {
-      setTimeout(() => {
-        // In real app, this would update the upload status via backend
-        console.log('Upload complete:', upload.id)
-      }, 3000)
-    }
-    
-    // Show success message
-    alert(scheduleDate 
-      ? `${listingsToUpload.length} produkter schemalagda för publicering!`
-      : `${listingsToUpload.length} produkter laddas upp till Etsy som drafts...`
-    )
   }
   
   return (

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { X, Edit2, Trash2, ChevronDown, ChevronUp, Sparkles } from 'lucide-react'
+import { X, Edit2, Trash2, ChevronDown, ChevronUp, Sparkles, Video } from 'lucide-react'
 import SEOBadge from './SEOBadge'
 
 function ListingCard({ listing, onUpdate, onRemove }) {
@@ -9,13 +9,18 @@ function ListingCard({ listing, onUpdate, onRemove }) {
     title: listing.title,
     description: listing.description,
     tags: listing.tags,
-    price: listing.price || ''
+    price: listing.price || '',
+    videos: listing.videos ? [...listing.videos] : []
   })
   const [newTag, setNewTag] = useState('')
   
   const handleSave = () => {
     onUpdate(listing.id, editData)
     setIsEditing(false)
+  }
+
+  const removeVideo = (index) => {
+    setEditData(d => ({ ...d, videos: d.videos.filter((_, i) => i !== index) }))
   }
   
   const handleCancel = () => {
@@ -43,9 +48,9 @@ function ListingCard({ listing, onUpdate, onRemove }) {
   
   return (
     <div className="listing-card bg-white rounded-xl shadow-md overflow-hidden border border-gray-100">
-      {/* Image Gallery */}
+      {/* Media Gallery (Images + Videos) */}
       <div className="relative">
-        <div className="aspect-square bg-gray-100">
+        <div className="aspect-square bg-gray-100 flex items-center justify-center overflow-hidden">
           {primaryImage && (
             <img
               src={primaryImage.preview}
@@ -54,14 +59,25 @@ function ListingCard({ listing, onUpdate, onRemove }) {
             />
           )}
         </div>
-        
+        {/* Video previews */}
+        {listing.videos && listing.videos.length > 0 && (
+          <div className="flex flex-wrap gap-2 mt-2">
+            {listing.videos.map((video, idx) => (
+              <div key={idx} className="relative w-24 h-24 bg-black rounded overflow-hidden flex items-center justify-center">
+                <video src={video.preview} controls className="w-full h-full object-cover" />
+                <div className="absolute top-1 left-1 bg-white bg-opacity-80 rounded-full p-1">
+                  <Video className="w-4 h-4 text-etsy-orange" />
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
         {/* Image count badge */}
         {listing.images.length > 1 && (
           <div className="absolute bottom-2 right-2 bg-black bg-opacity-70 text-white text-xs px-2 py-1 rounded-full">
             +{listing.images.length - 1} bilder
           </div>
         )}
-        
         {/* Actions */}
         <div className="absolute top-2 right-2 flex gap-1">
           <button
@@ -79,7 +95,6 @@ function ListingCard({ listing, onUpdate, onRemove }) {
             <Trash2 className="w-4 h-4 text-red-500" />
           </button>
         </div>
-        
         {/* SEO Badge */}
         <div className="absolute top-2 left-2">
           <SEOBadge score={listing.seoScore} />
@@ -91,6 +106,26 @@ function ListingCard({ listing, onUpdate, onRemove }) {
         {isEditing ? (
           /* Edit Mode */
           <div className="space-y-4">
+            {/* Video Previews & Remove */}
+            {editData.videos && editData.videos.length > 0 && (
+              <div>
+                <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Videor</label>
+                <div className="flex flex-wrap gap-2 mt-2">
+                  {editData.videos.map((video, idx) => (
+                    <div key={idx} className="relative w-24 h-24 bg-black rounded overflow-hidden flex items-center justify-center">
+                      <video src={video.preview} controls className="w-full h-full object-cover" />
+                      <button
+                        onClick={() => removeVideo(idx)}
+                        className="absolute top-1 right-1 bg-white bg-opacity-80 rounded-full p-1 hover:bg-red-200"
+                        title="Ta bort video"
+                      >
+                        <X className="w-4 h-4 text-red-500" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
             {/* Title */}
             <div>
               <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Titel</label>
