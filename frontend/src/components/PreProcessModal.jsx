@@ -29,8 +29,6 @@ function PreProcessModal({ isOpen, onClose, onConfirm, productCount }) {
     saveAsTemplate: false,
     templateName: ''
   })
-    // ...existing code...
-  })
   
   if (!isOpen) return null
   
