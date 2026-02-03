@@ -116,8 +116,6 @@ function PreProcessModal({ isOpen, onClose, onConfirm, productCount }) {
             </div>
             <p className="text-xs text-gray-400">Lämna tomt för att använda standardprofil</p>
           </div>
-            <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-2">
-              <DollarSign className="w-4 h-4" />
               Standardpris (SEK)
             </label>
             <input
