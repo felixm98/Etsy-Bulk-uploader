@@ -91,9 +91,18 @@ const processFiles = (files) => {
       })
     }
     
-    // Only add image files
+    // Add image files
     if (file.type.startsWith('image/')) {
       products.get(productName).images.push({
+        file,
+        preview: URL.createObjectURL(file),
+        name: file.name
+      })
+    }
+    // Add video files
+    if (file.type.startsWith('video/')) {
+      if (!products.get(productName).videos) products.get(productName).videos = [];
+      products.get(productName).videos.push({
         file,
         preview: URL.createObjectURL(file),
         name: file.name
@@ -179,7 +188,8 @@ function DropZone({ onFilesProcessed, isProcessing, setIsProcessing, showPreProc
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
     accept: {
-      'image/*': ['.png', '.jpg', '.jpeg', '.gif', '.webp']
+      'image/*': ['.png', '.jpg', '.jpeg', '.gif', '.webp'],
+      'video/*': ['.mp4', '.webm', '.mov']
     },
     noClick: false,
     multiple: true

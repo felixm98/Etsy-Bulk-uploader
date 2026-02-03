@@ -20,10 +20,69 @@ function PreProcessModal({ isOpen, onClose, onConfirm, productCount }) {
     defaultPrice: '',
     category: CATEGORIES[0],
     shippingProfile: 'digital',
+    shippingCost: '',
+    shippingTime: '',
     returnPolicy: 'no_returns',
+    quantity: 1,
+    materials: '',
     autoPublish: false,
     saveAsTemplate: false,
     templateName: ''
+            {/* Quantity */}
+            <div>
+              <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-2">
+                Antal i lager
+              </label>
+              <input
+                type="number"
+                min="1"
+                value={settings.quantity}
+                onChange={(e) => setSettings(s => ({ ...s, quantity: e.target.value }))}
+                placeholder="T.ex. 10"
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-etsy-orange focus:border-transparent"
+              />
+              <p className="text-xs text-gray-400 mt-1">Hur många exemplar som finns tillgängliga för försäljning</p>
+            </div>
+
+            {/* Materials */}
+            <div>
+              <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-2">
+                Material
+              </label>
+              <input
+                type="text"
+                value={settings.materials}
+                onChange={(e) => setSettings(s => ({ ...s, materials: e.target.value }))}
+                placeholder="T.ex. bomull, polyester, trä"
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-etsy-orange focus:border-transparent"
+              />
+              <p className="text-xs text-gray-400 mt-1">Ange material, separerade med kommatecken</p>
+            </div>
+
+            {/* Expanded Shipping Options */}
+            <div>
+              <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-2">
+                Mer detaljerad frakt (valfritt)
+              </label>
+              <div className="flex gap-2 mb-2">
+                <input
+                  type="number"
+                  min="0"
+                  value={settings.shippingCost}
+                  onChange={(e) => setSettings(s => ({ ...s, shippingCost: e.target.value }))}
+                  placeholder="Fraktkostnad (SEK)"
+                  className="w-1/2 px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-etsy-orange focus:border-transparent"
+                />
+                <input
+                  type="text"
+                  value={settings.shippingTime}
+                  onChange={(e) => setSettings(s => ({ ...s, shippingTime: e.target.value }))}
+                  placeholder="Leveranstid (t.ex. 1-3 dagar)"
+                  className="w-1/2 px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-etsy-orange focus:border-transparent"
+                />
+              </div>
+              <p className="text-xs text-gray-400">Lämna tomt för att använda standardprofil</p>
+            </div>
   })
   
   if (!isOpen) return null
