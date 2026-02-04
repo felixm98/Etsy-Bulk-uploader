@@ -1,34 +1,140 @@
-import { useState } from 'react'
-import { X, Settings, DollarSign, Tag, Truck, RotateCcw } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { X, Settings, DollarSign, Tag, Truck, RotateCcw, Loader2, AlertCircle } from 'lucide-react'
+import api from '../services/api'
 
-const CATEGORIES = [
-  'Digital Downloads > Graphics > Mockups',
-  'Digital Downloads > Graphics > Clipart',
-  'Digital Downloads > Templates',
-  'Craft Supplies & Tools > Patterns & How To',
-  'Art & Collectibles > Prints > Digital Prints'
+// Fallback categories when API fails or not connected
+const FALLBACK_CATEGORIES = [
+  { id: 2078, name: 'Digital Downloads > Graphics > Mockups' },
+  { id: 2079, name: 'Digital Downloads > Graphics > Clipart' },
+  { id: 2080, name: 'Digital Downloads > Templates' },
+  { id: 1, name: 'Craft Supplies & Tools > Patterns & How To' },
+  { id: 2, name: 'Art & Collectibles > Prints > Digital Prints' }
 ]
 
-const SHIPPING_PROFILES = [
-  { id: 'digital', name: 'Digital nedladdning (ingen frakt)' },
-  { id: 'standard', name: 'Standardfrakt Sverige' },
-  { id: 'international', name: 'Internationell frakt' }
+// Fallback shipping profiles when API fails or not connected
+const FALLBACK_SHIPPING_PROFILES = [
+  { shipping_profile_id: 'digital', title: 'Digital nedladdning (ingen frakt)' },
+  { shipping_profile_id: 'standard', title: 'Standardfrakt Sverige' },
+  { shipping_profile_id: 'international', title: 'Internationell frakt' }
+]
+
+// Fallback return policies
+const FALLBACK_RETURN_POLICIES = [
+  { return_policy_id: 'no_returns', label: 'Inga returer (digitala produkter)' },
+  { return_policy_id: '14_days', label: '14 dagars returrätt' },
+  { return_policy_id: '30_days', label: '30 dagars returrätt' }
 ]
 
 function PreProcessModal({ isOpen, onClose, onConfirm, productCount }) {
   const [settings, setSettings] = useState({
     defaultPrice: '',
-    category: CATEGORIES[0],
-    shippingProfile: 'digital',
+    category: '',
+    categoryId: null,
+    shippingProfile: '',
+    shippingProfileId: null,
     shippingCost: '',
     shippingTime: '',
-    returnPolicy: 'no_returns',
+    returnPolicy: '',
+    returnPolicyId: null,
     quantity: 1,
     materials: '',
     autoPublish: false,
     saveAsTemplate: false,
     templateName: ''
   })
+  
+  // State for fetched Etsy data
+  const [shippingProfiles, setShippingProfiles] = useState([])
+  const [categories, setCategories] = useState([])
+  const [returnPolicies, setReturnPolicies] = useState([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [etsyConnected, setEtsyConnected] = useState(false)
+  const [loadError, setLoadError] = useState(null)
+  
+  // Fetch Etsy data when modal opens
+  useEffect(() => {
+    if (!isOpen) return
+    
+    const fetchEtsyData = async () => {
+      setIsLoading(true)
+      setLoadError(null)
+      
+      try {
+        // Check Etsy connection status first
+        const status = await api.getEtsyStatus()
+        setEtsyConnected(status.connected)
+        
+        if (status.connected) {
+          // Fetch real data from Etsy in parallel
+          const [profilesData, categoriesData, policiesData] = await Promise.all([
+            api.getShippingProfiles().catch(() => []),
+            api.getCategories().catch(() => []),
+            api.getReturnPolicies().catch(() => [])
+          ])
+          
+          // Set shipping profiles (use real data or fallback)
+          const profiles = profilesData.length > 0 ? profilesData : FALLBACK_SHIPPING_PROFILES
+          setShippingProfiles(profiles)
+          
+          // Set categories (flatten taxonomy if needed)
+          const cats = categoriesData.length > 0 ? flattenCategories(categoriesData) : FALLBACK_CATEGORIES
+          setCategories(cats)
+          
+          // Set return policies
+          const policies = policiesData.length > 0 ? policiesData : FALLBACK_RETURN_POLICIES
+          setReturnPolicies(policies)
+          
+          // Set default values
+          setSettings(s => ({
+            ...s,
+            shippingProfile: profiles[0]?.title || profiles[0]?.shipping_profile_id || 'digital',
+            shippingProfileId: profiles[0]?.shipping_profile_id || null,
+            category: cats[0]?.name || 'Digital Downloads',
+            categoryId: cats[0]?.id || 2078,
+            returnPolicy: policies[0]?.label || policies[0]?.return_policy_id || 'no_returns',
+            returnPolicyId: policies[0]?.return_policy_id || null
+          }))
+        } else {
+          // Use fallbacks when not connected
+          setShippingProfiles(FALLBACK_SHIPPING_PROFILES)
+          setCategories(FALLBACK_CATEGORIES)
+          setReturnPolicies(FALLBACK_RETURN_POLICIES)
+          setSettings(s => ({
+            ...s,
+            shippingProfile: FALLBACK_SHIPPING_PROFILES[0].title,
+            shippingProfileId: FALLBACK_SHIPPING_PROFILES[0].shipping_profile_id,
+            category: FALLBACK_CATEGORIES[0].name,
+            categoryId: FALLBACK_CATEGORIES[0].id,
+            returnPolicy: FALLBACK_RETURN_POLICIES[0].label,
+            returnPolicyId: FALLBACK_RETURN_POLICIES[0].return_policy_id
+          }))
+        }
+      } catch (err) {
+        console.error('Failed to fetch Etsy data:', err)
+        setLoadError('Kunde inte hämta data från Etsy. Använder standardvärden.')
+        // Use fallbacks on error
+        setShippingProfiles(FALLBACK_SHIPPING_PROFILES)
+        setCategories(FALLBACK_CATEGORIES)
+        setReturnPolicies(FALLBACK_RETURN_POLICIES)
+      } finally {
+        setIsLoading(false)
+      }
+    }
+    
+    fetchEtsyData()
+  }, [isOpen])
+  
+  // Helper to flatten nested category taxonomy
+  const flattenCategories = (nodes, prefix = '', result = []) => {
+    for (const node of nodes) {
+      const name = prefix ? `${prefix} > ${node.name}` : node.name
+      result.push({ id: node.id, name })
+      if (node.children && node.children.length > 0) {
+        flattenCategories(node.children, name, result)
+      }
+    }
+    return result.slice(0, 50) // Limit to 50 for performance
+  }
   
   if (!isOpen) return null
   
@@ -61,6 +167,32 @@ function PreProcessModal({ isOpen, onClose, onConfirm, productCount }) {
 
         {/* Content */}
         <div className="p-6 space-y-6">
+          {/* Loading State */}
+          {isLoading && (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="w-6 h-6 text-etsy-orange animate-spin" />
+              <span className="ml-2 text-gray-600">Hämtar data från Etsy...</span>
+            </div>
+          )}
+          
+          {/* Error/Warning Banner */}
+          {loadError && (
+            <div className="flex items-center gap-2 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+              <AlertCircle className="w-5 h-5 text-yellow-600" />
+              <span className="text-sm text-yellow-700">{loadError}</span>
+            </div>
+          )}
+          
+          {/* Etsy Connection Status */}
+          {!isLoading && !etsyConnected && (
+            <div className="flex items-center gap-2 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+              <AlertCircle className="w-5 h-5 text-blue-600" />
+              <span className="text-sm text-blue-700">
+                Etsy ej ansluten. Anslut på inställningssidan för att hämta dina profiler.
+              </span>
+            </div>
+          )}
+          
           {/* Quantity */}
           <div>
             <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-2">
@@ -131,14 +263,23 @@ function PreProcessModal({ isOpen, onClose, onConfirm, productCount }) {
             <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-2">
               <Tag className="w-4 h-4" />
               Kategori
+              {etsyConnected && <span className="text-xs text-green-600">(från Etsy)</span>}
             </label>
             <select
               value={settings.category}
-              onChange={(e) => setSettings(s => ({ ...s, category: e.target.value }))}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-etsy-orange focus:border-transparent"
+              onChange={(e) => {
+                const selected = categories.find(c => c.name === e.target.value)
+                setSettings(s => ({ 
+                  ...s, 
+                  category: e.target.value,
+                  categoryId: selected?.id || null
+                }))
+              }}
+              disabled={isLoading}
+              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-etsy-orange focus:border-transparent disabled:bg-gray-100"
             >
-              {CATEGORIES.map(cat => (
-                <option key={cat} value={cat}>{cat}</option>
+              {categories.map(cat => (
+                <option key={cat.id} value={cat.name}>{cat.name}</option>
               ))}
             </select>
           </div>
@@ -148,14 +289,27 @@ function PreProcessModal({ isOpen, onClose, onConfirm, productCount }) {
             <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-2">
               <Truck className="w-4 h-4" />
               Fraktprofil
+              {etsyConnected && shippingProfiles.length > 0 && shippingProfiles[0].shipping_profile_id !== 'digital' && (
+                <span className="text-xs text-green-600">(från din Etsy-butik)</span>
+              )}
             </label>
             <select
               value={settings.shippingProfile}
-              onChange={(e) => setSettings(s => ({ ...s, shippingProfile: e.target.value }))}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-etsy-orange focus:border-transparent"
+              onChange={(e) => {
+                const selected = shippingProfiles.find(p => (p.title || p.shipping_profile_id) === e.target.value)
+                setSettings(s => ({ 
+                  ...s, 
+                  shippingProfile: e.target.value,
+                  shippingProfileId: selected?.shipping_profile_id || null
+                }))
+              }}
+              disabled={isLoading}
+              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-etsy-orange focus:border-transparent disabled:bg-gray-100"
             >
-              {SHIPPING_PROFILES.map(profile => (
-                <option key={profile.id} value={profile.id}>{profile.name}</option>
+              {shippingProfiles.map(profile => (
+                <option key={profile.shipping_profile_id} value={profile.title || profile.shipping_profile_id}>
+                  {profile.title || profile.shipping_profile_id}
+                </option>
               ))}
             </select>
           </div>
@@ -165,15 +319,28 @@ function PreProcessModal({ isOpen, onClose, onConfirm, productCount }) {
             <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-2">
               <RotateCcw className="w-4 h-4" />
               Returpolicy
+              {etsyConnected && returnPolicies.length > 0 && returnPolicies[0].return_policy_id !== 'no_returns' && (
+                <span className="text-xs text-green-600">(från din Etsy-butik)</span>
+              )}
             </label>
             <select
               value={settings.returnPolicy}
-              onChange={(e) => setSettings(s => ({ ...s, returnPolicy: e.target.value }))}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-etsy-orange focus:border-transparent"
+              onChange={(e) => {
+                const selected = returnPolicies.find(p => (p.label || p.return_policy_id) === e.target.value)
+                setSettings(s => ({ 
+                  ...s, 
+                  returnPolicy: e.target.value,
+                  returnPolicyId: selected?.return_policy_id || null
+                }))
+              }}
+              disabled={isLoading}
+              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-etsy-orange focus:border-transparent disabled:bg-gray-100"
             >
-              <option value="no_returns">Inga returer (digitala produkter)</option>
-              <option value="14_days">14 dagars returrätt</option>
-              <option value="30_days">30 dagars returrätt</option>
+              {returnPolicies.map(policy => (
+                <option key={policy.return_policy_id} value={policy.label || policy.return_policy_id}>
+                  {policy.label || policy.return_policy_id}
+                </option>
+              ))}
             </select>
           </div>
           

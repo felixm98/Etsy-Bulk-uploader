@@ -20,7 +20,7 @@ from seo_scorer import calculate_seo_score
 from etsy_api import (
     get_authorization_url, exchange_code_for_tokens, refresh_access_token,
     get_shop_info, get_shipping_profiles, get_return_policies,
-    create_draft_listing, upload_listing_image, publish_listing,
+    create_draft_listing, upload_listing_image, upload_listing_video, publish_listing,
     encrypt_token, decrypt_token, get_taxonomy_nodes
 )
 from scheduler import init_scheduler, schedule_publish, cancel_scheduled_publish, shutdown_scheduler
@@ -327,6 +327,24 @@ def get_etsy_shipping_profiles():
         return jsonify({'error': str(e)}), 500
 
 
+@app.route('/api/etsy/return-policies', methods=['GET'])
+@jwt_required()
+def get_etsy_return_policies():
+    """Get user's Etsy return policies"""
+    user_id = get_jwt_identity()
+    etsy_token = EtsyToken.query.filter_by(user_id=user_id).first()
+    
+    if not etsy_token:
+        return jsonify({'error': 'Etsy not connected'}), 400
+    
+    try:
+        access_token = decrypt_token(etsy_token.access_token_encrypted)
+        policies = get_return_policies(access_token, etsy_token.shop_id)
+        return jsonify(policies)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
 @app.route('/api/etsy/categories', methods=['GET'])
 def get_categories():
     """Get Etsy taxonomy/categories"""
@@ -386,7 +404,8 @@ def create_upload():
             price=listing_data.get('price'),
             category=listing_data.get('category'),
             seo_score=listing_data.get('seo_score'),
-            images=listing_data.get('images', [])
+            images=listing_data.get('images', []),
+            videos=listing_data.get('videos', [])
         )
         db.session.add(listing)
     
@@ -397,6 +416,104 @@ def create_upload():
         schedule_publish(upload.id, scheduled_for, app)
     
     return jsonify(upload.to_dict()), 201
+
+
+@app.route('/api/uploads/<int:upload_id>/listings/<int:listing_id>/videos', methods=['POST'])
+@jwt_required()
+def upload_video_to_listing(upload_id, listing_id):
+    """
+    Upload a video file to a specific listing.
+    
+    This endpoint accepts a video file and uploads it to Etsy.
+    The listing must already have an etsy_listing_id from a prior publish.
+    
+    Etsy video requirements:
+    - Max file size: 100MB
+    - Supported formats: MP4, MOV
+    - Max duration: 15 seconds
+    - Max resolution: 4K (3840x2160)
+    """
+    user_id = get_jwt_identity()
+    
+    # Validate upload ownership
+    upload = Upload.query.filter_by(id=upload_id, user_id=user_id).first()
+    if not upload:
+        return jsonify({'error': 'Upload not found'}), 404
+    
+    # Get the listing
+    listing = Listing.query.filter_by(id=listing_id, upload_id=upload_id).first()
+    if not listing:
+        return jsonify({'error': 'Listing not found'}), 404
+    
+    if not listing.etsy_listing_id:
+        return jsonify({'error': 'Listing has not been published to Etsy yet'}), 400
+    
+    # Check Etsy connection
+    etsy_token = EtsyToken.query.filter_by(user_id=user_id).first()
+    if not etsy_token:
+        return jsonify({'error': 'Etsy not connected'}), 400
+    
+    # Get video file from request
+    if 'video' not in request.files:
+        return jsonify({'error': 'No video file provided'}), 400
+    
+    video_file = request.files['video']
+    
+    # Validate file type
+    allowed_extensions = {'.mp4', '.mov'}
+    file_ext = os.path.splitext(video_file.filename)[1].lower()
+    if file_ext not in allowed_extensions:
+        return jsonify({'error': f'Invalid video format. Allowed: {", ".join(allowed_extensions)}'}), 400
+    
+    try:
+        access_token = decrypt_token(etsy_token.access_token_encrypted)
+        
+        # Check if token needs refresh
+        if etsy_token.expires_at and etsy_token.expires_at <= datetime.utcnow():
+            refresh_token_str = decrypt_token(etsy_token.refresh_token_encrypted)
+            new_tokens = refresh_access_token(refresh_token_str)
+            
+            etsy_token.access_token_encrypted = encrypt_token(new_tokens['access_token'])
+            etsy_token.refresh_token_encrypted = encrypt_token(new_tokens['refresh_token'])
+            etsy_token.expires_at = datetime.utcnow() + timedelta(seconds=new_tokens['expires_in'])
+            
+            access_token = new_tokens['access_token']
+            db.session.commit()
+        
+        # Read video data
+        video_data = video_file.read()
+        
+        # Check file size (100MB limit)
+        if len(video_data) > 100 * 1024 * 1024:
+            return jsonify({'error': 'Video file too large. Maximum size is 100MB'}), 400
+        
+        # Upload to Etsy
+        result = upload_listing_video(
+            access_token,
+            etsy_token.shop_id,
+            listing.etsy_listing_id,
+            video_data,
+            video_file.filename
+        )
+        
+        # Update listing videos metadata
+        videos = listing.videos or []
+        videos.append({
+            'name': video_file.filename,
+            'etsy_video_id': result.get('video_id'),
+            'uploaded_at': datetime.utcnow().isoformat()
+        })
+        listing.videos = videos
+        db.session.commit()
+        
+        return jsonify({
+            'message': 'Video uploaded successfully',
+            'video_id': result.get('video_id'),
+            'listing_id': listing.id
+        })
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 
 @app.route('/api/uploads/<int:upload_id>/publish', methods=['POST'])
@@ -452,6 +569,11 @@ def publish_upload(upload_id):
                 
                 # Upload images would go here
                 # For each image in listing.images, upload to Etsy
+                
+                # Upload videos if present
+                # Note: Videos should be uploaded via the /api/uploads/:id/videos endpoint
+                # which handles the actual file upload from the frontend
+                # Videos in listing.videos are metadata only at this point
                 
                 db.session.commit()
                 

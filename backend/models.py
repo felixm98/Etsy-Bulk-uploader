@@ -115,6 +115,9 @@ class Listing(db.Model):
     # Images stored as JSON array of paths
     images = db.Column(db.JSON)
     
+    # Videos stored as JSON array of paths
+    videos = db.Column(db.JSON)
+    
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     
     def to_dict(self):
@@ -131,6 +134,7 @@ class Listing(db.Model):
             'etsy_url': self.etsy_url,
             'status': self.status,
             'images': self.images or [],
+            'videos': self.videos or [],
             'created_at': self.created_at.isoformat()
         }
 

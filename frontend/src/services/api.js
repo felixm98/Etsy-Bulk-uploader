@@ -237,6 +237,10 @@ class ApiService {
     return this.request('/api/etsy/shipping-profiles')
   }
 
+  async getReturnPolicies() {
+    return this.request('/api/etsy/return-policies')
+  }
+
   async getCategories() {
     return this.request('/api/etsy/categories', { auth: false })
   }
@@ -280,6 +284,26 @@ class ApiService {
     return this.request(`/api/uploads/${uploadId}`, {
       method: 'DELETE'
     })
+  }
+
+  async uploadVideoToListing(uploadId, listingId, videoFile) {
+    const formData = new FormData()
+    formData.append('video', videoFile)
+
+    const response = await fetch(`${API_BASE}/api/uploads/${uploadId}/listings/${listingId}/videos`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${this.accessToken}`
+      },
+      body: formData
+    })
+
+    if (!response.ok) {
+      const error = await response.json()
+      throw new Error(error.error || 'Video upload failed')
+    }
+
+    return response.json()
   }
 
   // ============== Health ==============

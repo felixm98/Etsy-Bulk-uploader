@@ -330,6 +330,109 @@ def upload_listing_image(access_token: str, shop_id: str, listing_id: str,
     return response.json()
 
 
+def upload_listing_video(access_token: str, shop_id: str, listing_id: str,
+                         video_data: bytes, video_name: str = 'video.mp4') -> dict:
+    """
+    Upload a video to a listing.
+    
+    Etsy supports videos for listings with the following requirements:
+    - Max file size: 100MB
+    - Supported formats: MP4, MOV
+    - Max duration: 15 seconds for listing videos, 5 seconds for preview videos
+    - Max resolution: 4K (3840x2160)
+    
+    Args:
+        access_token: Valid access token
+        shop_id: Shop ID
+        listing_id: Listing ID
+        video_data: Video file bytes
+        video_name: Original video filename for content type detection
+    
+    Returns:
+        Video upload response with video_id
+    """
+    api_key = os.environ.get('ETSY_API_KEY')
+    
+    headers = {
+        'Authorization': f'Bearer {access_token}',
+        'x-api-key': api_key
+    }
+    
+    # Determine content type from filename
+    content_type = 'video/mp4'
+    if video_name.lower().endswith('.mov'):
+        content_type = 'video/quicktime'
+    elif video_name.lower().endswith('.mp4'):
+        content_type = 'video/mp4'
+    
+    files = {
+        'video': (video_name, video_data, content_type)
+    }
+    
+    response = requests.post(
+        f'{ETSY_API_BASE}/application/shops/{shop_id}/listings/{listing_id}/videos',
+        headers=headers,
+        files=files
+    )
+    
+    if response.status_code not in [200, 201]:
+        raise Exception(f"Failed to upload video: {response.text}")
+    
+    return response.json()
+
+
+def get_listing_videos(access_token: str, listing_id: str) -> list:
+    """
+    Get videos attached to a listing.
+    
+    Args:
+        access_token: Valid access token
+        listing_id: Listing ID
+    
+    Returns:
+        List of video objects
+    """
+    headers = get_auth_headers(access_token)
+    
+    response = requests.get(
+        f'{ETSY_API_BASE}/application/listings/{listing_id}/videos',
+        headers=headers
+    )
+    
+    if response.status_code != 200:
+        return []
+    
+    return response.json().get('results', [])
+
+
+def delete_listing_video(access_token: str, shop_id: str, listing_id: str, video_id: str) -> bool:
+    """
+    Delete a video from a listing.
+    
+    Args:
+        access_token: Valid access token
+        shop_id: Shop ID
+        listing_id: Listing ID
+        video_id: Video ID to delete
+    
+    Returns:
+        True if successful
+    """
+    api_key = os.environ.get('ETSY_API_KEY')
+    
+    headers = {
+        'Authorization': f'Bearer {access_token}',
+        'x-api-key': api_key
+    }
+    
+    response = requests.delete(
+        f'{ETSY_API_BASE}/application/shops/{shop_id}/listings/{listing_id}/videos/{video_id}',
+        headers=headers
+    )
+    
+    return response.status_code == 204
+
+
 def update_listing(access_token: str, shop_id: str, listing_id: str, updates: dict) -> dict:
     """
     Update an existing listing.
