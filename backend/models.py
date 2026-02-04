@@ -165,19 +165,14 @@ class EtsyToken(db.Model):
             'expires_at': self.expires_at.isoformat() if self.expires_at else None,
             'is_valid': self.expires_at and self.expires_at > datetime.utcnow()
         }
+
+
 class UserSettings(db.Model):
-    """User-specific settings including API credentials"""
+    """User-specific default settings for listings"""
     __tablename__ = 'user_settings'
     
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, unique=True)
-    
-    # Etsy API credentials (encrypted)
-    etsy_api_key_encrypted = db.Column(db.LargeBinary)
-    etsy_shared_secret_encrypted = db.Column(db.LargeBinary)
-    
-    # Groq API key (encrypted) - optional, falls back to env
-    groq_api_key_encrypted = db.Column(db.LargeBinary)
     
     # Default listing settings
     default_price = db.Column(db.Float, default=10.0)
@@ -192,9 +187,8 @@ class UserSettings(db.Model):
     
     def to_dict(self):
         return {
-            'has_etsy_credentials': self.etsy_api_key_encrypted is not None,
-            'has_groq_key': self.groq_api_key_encrypted is not None,
             'default_price': self.default_price,
             'default_quantity': self.default_quantity,
             'auto_renew': self.auto_renew
         }
+
